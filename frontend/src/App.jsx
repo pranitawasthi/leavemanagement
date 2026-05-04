@@ -233,6 +233,7 @@ function EmployeeWorkspace({ api, flash, user, users, leaves, quotas, tab, refre
     <DashboardGrid>
       <SummaryCards leaves={leaves} quotas={quotas} users={users} />
       <LeaveTypeChart leaves={leaves} />
+      <LeaveMonthChart leaves={leaves} />
       <EmployeeAttendance api={api} flash={flash} />
       <Panel title="Recent requests" action={<RefreshButton onClick={refresh} />}>
         <LeaveFilters leaves={leaves} users={users} userMap={userMap} showExport={false} />
@@ -284,6 +285,7 @@ function ManagerWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
     <DashboardGrid>
       <SummaryCards leaves={leaves} users={users} />
       <LeaveTypeChart leaves={leaves} />
+      <LeaveMonthChart leaves={leaves} />
       <Panel title="Pending approvals" action={<RefreshButton onClick={loadPending} busy={busy} />}>
         <ApprovalQueue api={api} flash={flash} manager={user} leaves={pending} userMap={userMap} onDecision={decide} />
       </Panel>
@@ -302,6 +304,7 @@ function AdminWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
     <DashboardGrid>
       <SummaryCards leaves={leaves} users={users} />
       <LeaveTypeChart leaves={leaves} />
+      <LeaveMonthChart leaves={leaves} />
       <Panel title="People directory" action={<RefreshButton onClick={refresh} />}>
         <PeopleTable users={users} currentUser={user} />
       </Panel>
@@ -311,7 +314,7 @@ function AdminWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
 
 function LeaveComposer({ api, flash, user, refresh }) {
   const [text, setText] = useState("Need next Monday and Tuesday off for family function");
-  const [form, setForm] = useState({ leave_type: "Casual", start_date: "", end_date: "", reason: "", manager_id: user.manager_id || "" });
+  const [form, setForm] = useState({ leave_type: "Casual", start_date: "", end_date: "", is_half_day: false, reason: "", manager_id: user.manager_id || "" });
   const [managers, setManagers] = useState([]);
   const [parsed, setParsed] = useState(null);
   const [busy, setBusy] = useState("");
@@ -343,6 +346,7 @@ function LeaveComposer({ api, flash, user, refresh }) {
         leave_type: result.leave_type || form.leave_type,
         start_date: result.start_date || form.start_date,
         end_date: result.end_date || form.end_date,
+        is_half_day: Boolean(result.is_half_day),
         reason: result.reason || text,
       });
       flash(`AI parser filled the request from ${result.source}.`);
@@ -364,7 +368,7 @@ function LeaveComposer({ api, flash, user, refresh }) {
       flash("Leave request submitted.");
       setText("");
       setParsed(null);
-      setForm({ leave_type: "Casual", start_date: "", end_date: "", reason: "", manager_id: user.manager_id || managers[0]?.id || "" });
+      setForm({ leave_type: "Casual", start_date: "", end_date: "", is_half_day: false, reason: "", manager_id: user.manager_id || managers[0]?.id || "" });
       await refresh();
     } catch (error) {
       flash(error.message);
@@ -386,10 +390,18 @@ function LeaveComposer({ api, flash, user, refresh }) {
         <form onSubmit={submit}>
           <div className="form-grid">
             <label>Leave type<select value={form.leave_type} onChange={(e) => setForm({ ...form, leave_type: e.target.value })}>{LEAVE_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
-            <label>Start date<input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} required /></label>
-            <label>End date<input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} required /></label>
+            <label>Start date<input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value, end_date: form.is_half_day ? e.target.value : form.end_date })} required /></label>
+            <label>End date<input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} required disabled={form.is_half_day} /></label>
             <label>Apply to manager<select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })} required>{managers.map((manager) => <option key={manager.id} value={manager.id}>{manager.name}</option>)}</select></label>
           </div>
+          <label className="checkbox-line">
+            <input
+              type="checkbox"
+              checked={form.is_half_day}
+              onChange={(e) => setForm({ ...form, is_half_day: e.target.checked, end_date: e.target.checked ? form.start_date : form.end_date })}
+            />
+            Half-day leave
+          </label>
           <label>Reason<textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required /></label>
           <button className="primary" disabled={busy === "submit"}>{busy === "submit" ? "Submitting..." : "Submit request"}</button>
         </form>
@@ -555,6 +567,7 @@ function ApprovalCard({ api, flash, manager, leave, user, onDecision }) {
         <StatusBadge status={leave.status} />
       </div>
       <p>{formatDate(leave.start_date)} to {formatDate(leave.end_date)} · {fmtDays(leave.total_days)} day(s)</p>
+      {leave.is_half_day && <p className="muted">Half-day request</p>}
       <p>{leave.reason}</p>
       {insight && <InsightBlock insight={insight} />}
       <div className="decision-row">
@@ -687,7 +700,7 @@ function CalendarList({ leaves, userMap, start, end }) {
             return (
               <div className="calendar-item" key={`${day}-${leave.id}`}>
                 <strong>{person?.name || "Employee"}</strong>
-                <span>{leave.leave_type}</span>
+                <span>{leave.leave_type}{leave.is_half_day ? " · Half-day" : ""}</span>
                 <StatusBadge status={leave.status} />
               </div>
             );
@@ -720,11 +733,31 @@ function LeaveTypeChart({ leaves }) {
   );
 }
 
+function LeaveMonthChart({ leaves }) {
+  const counts = monthBuckets(leaves).slice(-6);
+  const max = Math.max(1, ...counts.map((item) => item.count));
+
+  return (
+    <Panel title="Leaves by month">
+      <div className="chart-list">
+        {counts.map((item) => (
+          <div className="chart-row" key={item.month}>
+            <span>{item.month}</span>
+            <div className="chart-track"><span style={{ width: `${(item.count / max) * 100}%` }} /></div>
+            <strong>{item.count}</strong>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function LeaveFilters({ leaves, users, userMap, showExport = false }) {
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [reportMonth, setReportMonth] = useState(localDateISO().slice(0, 7));
   const filtered = leaves.filter((leave) => {
     const person = userMap[leave.user_id];
     const haystack = `${person?.name || ""} ${leave.leave_type} ${leave.reason}`.toLowerCase();
@@ -745,7 +778,8 @@ function LeaveFilters({ leaves, users, userMap, showExport = false }) {
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         <span>{filtered.length} of {leaves.length}</span>
-        {showExport && <button className="soft" onClick={() => exportLeavesCsv(filtered, userMap)}>Export CSV</button>}
+        {showExport && <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} />}
+        {showExport && <button className="soft" onClick={() => exportLeavesCsv(monthFilteredLeaves(filtered, reportMonth), userMap, reportMonth)}>Export month CSV</button>}
       </div>
       <LeaveList leaves={filtered} userMap={userMap} />
     </>
@@ -805,7 +839,7 @@ function LeaveList({ leaves, userMap }) {
         return (
           <article className="request-card" key={leave.id}>
             <div className="request-main">
-              <div><strong>{person?.name || "Your request"}</strong><span>{leave.leave_type} · {formatDate(leave.start_date)} to {formatDate(leave.end_date)}</span></div>
+              <div><strong>{person?.name || "Your request"}</strong><span>{leave.leave_type} · {formatDate(leave.start_date)} to {formatDate(leave.end_date)}{leave.is_half_day ? " · Half-day" : ""}</span></div>
               <StatusBadge status={leave.status} />
             </div>
             <p>{fmtDays(leave.total_days)} day(s) · {leave.reason}</p>
@@ -860,6 +894,7 @@ function ParserResult({ parsed }) {
         <Metric label="Type" value={parsed.leave_type || "Missing"} />
         <Metric label="Start" value={parsed.start_date || "Missing"} />
         <Metric label="End" value={parsed.end_date || "Missing"} />
+        <Metric label="Half-day" value={parsed.is_half_day ? "Yes" : "No"} />
         <Metric label="Days" value={fmtDays(parsed.working_days)} />
       </div>
       {parsed.missing_fields?.length > 0 && <p className="muted">Missing: {parsed.missing_fields.join(", ")}</p>}
@@ -981,14 +1016,35 @@ function enumerateDays(start, end) {
   return days;
 }
 
-function exportLeavesCsv(leaves, userMap) {
-  const headers = ["Employee", "Leave Type", "Start Date", "End Date", "Days", "Status", "Reason"];
+function monthBuckets(leaves) {
+  const buckets = {};
+  leaves.forEach((leave) => {
+    const month = String(leave.start_date || "").slice(0, 7);
+    if (!month) return;
+    buckets[month] = (buckets[month] || 0) + 1;
+  });
+  return Object.entries(buckets)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, count]) => ({ month, count }));
+}
+
+function monthFilteredLeaves(leaves, month) {
+  if (!month) return leaves;
+  const start = `${month}-01`;
+  const endDate = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0);
+  const end = localDateISO(endDate);
+  return leaves.filter((leave) => leave.end_date >= start && leave.start_date <= end);
+}
+
+function exportLeavesCsv(leaves, userMap, reportMonth = localDateISO().slice(0, 7)) {
+  const headers = ["Employee", "Leave Type", "Start Date", "End Date", "Days", "Half Day", "Status", "Reason"];
   const rows = leaves.map((leave) => [
     userMap[leave.user_id]?.name || leave.user_id,
     leave.leave_type,
     leave.start_date,
     leave.end_date,
     fmtDays(leave.total_days),
+    leave.is_half_day ? "Yes" : "No",
     leave.status,
     leave.reason,
   ]);
@@ -997,7 +1053,7 @@ function exportLeavesCsv(leaves, userMap) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `leave-report-${localDateISO()}.csv`;
+  link.download = `leave-report-${reportMonth}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }

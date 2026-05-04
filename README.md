@@ -12,7 +12,9 @@ A role-based leave and time-off management application with a FastAPI backend, M
 - Simulated employee attendance punch-in/punch-out.
 - Manager team attendance visibility.
 - CSV export for filtered manager/admin leave reports.
-- Simple leave-by-type chart.
+- Monthly CSV export for manager/admin leave reports.
+- Simple leave-by-type and leave-by-month charts.
+- Half-day leave support.
 - Manager approval queue with approve/reject actions and AI approval insight.
 - Admin people directory and user creation.
 - Leave quotas, leave request history, audit trail storage, and seeded demo data.
@@ -246,3 +248,9 @@ If the frontend cannot reach the backend, make sure FastAPI is running on `http:
 If AI parsing says `fallback`, check the FastAPI terminal logs. A `403 / 1010` from Groq usually means the request is being blocked by Groq/Cloudflare before normal API processing.
 
 If MongoDB connects to the wrong database, set `MONGODB_URI` and `MONGODB_DB_NAME` explicitly before starting the backend and before running the seed script.
+
+## Bonus Features Included
+
+- Manager/admin monthly CSV export from filtered leave report views.
+- Frontend charts for leaves by type and leaves by month.
+- Half-day leave requests. Half-day leave must use the same start and end date and consumes `0.5` day from quota.

@@ -230,6 +230,8 @@ source
 10. Manager approves or rejects the request.
 11. Backend updates leave status, quota counts, review metadata, and audit trail.
 
+Half-day requests are represented with `is_half_day`. They must use the same start and end date and consume `0.5` day from quota.
+
 ## Team Calendar Flow
 
 The team calendar is designed to satisfy the client's "who is out this week" requirement.
@@ -336,6 +338,7 @@ Leave requests:
 - leave type
 - start and end dates
 - total working days
+- half-day flag
 - reason
 - status
 - manager comments
@@ -409,7 +412,7 @@ The test checks health, auth, RBAC, seeded users, quotas, leave requests, AI par
 
 - Split `frontend/src/App.jsx` into focused component files for easier maintenance.
 - Add backend tests around attendance, team calendar, manager selection, and AI fallback behavior.
-- Add half-day leave support and holiday calendar support in the leave-day calculator.
+- Add holiday calendar support in the leave-day calculator.
 - Replace the raw Groq HTTP call with a dedicated client library or `httpx`.
 - Add in-app notifications when a manager approves or rejects a request.
 - Persist generated reports server-side for auditability.

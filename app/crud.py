@@ -19,6 +19,27 @@ from app.schemas import (
 from app.utils.date_calculator import calculate_leave_days
 
 
+def calculate_request_total_days(
+    start_date: date,
+    end_date: date,
+    is_half_day: bool = False,
+) -> float:
+    if is_half_day and start_date != end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Half-day leave must start and end on the same date",
+        )
+    total_days = calculate_leave_days(start_date, end_date)
+    if is_half_day:
+        if total_days <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Half-day leave must be on a working day",
+            )
+        return 0.5
+    return total_days
+
+
 def to_object_id(value: str) -> ObjectId:
     if not ObjectId.is_valid(value):
         raise HTTPException(
@@ -196,7 +217,7 @@ async def create_leave_request(db: AsyncIOMotorDatabase, leave: LeaveRequestCrea
     if not manager:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected manager does not exist")
 
-    total_days = calculate_leave_days(leave.start_date, leave.end_date)
+    total_days = calculate_request_total_days(leave.start_date, leave.end_date, leave.is_half_day)
     if total_days <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -216,6 +237,7 @@ async def create_leave_request(db: AsyncIOMotorDatabase, leave: LeaveRequestCrea
         "start_date": leave.start_date.isoformat(),
         "end_date": leave.end_date.isoformat(),
         "total_days": total_days,
+        "is_half_day": leave.is_half_day,
         "reason": leave.reason,
         "status": LeaveStatus.pending.value,
         "manager_comment": None,
@@ -299,7 +321,8 @@ async def update_leave_request(
     new_leave_type = LeaveType(update_data.get("leave_type", existing["leave_type"]))
     new_start_date = parse_stored_date(update_data.get("start_date", existing["start_date"]))
     new_end_date = parse_stored_date(update_data.get("end_date", existing["end_date"]))
-    new_total_days = calculate_leave_days(new_start_date, new_end_date)
+    new_is_half_day = update_data.get("is_half_day", existing.get("is_half_day", False))
+    new_total_days = calculate_request_total_days(new_start_date, new_end_date, new_is_half_day)
 
     if "start_date" in update_data and update_data["start_date"]:
         update_data["start_date"] = update_data["start_date"].isoformat()

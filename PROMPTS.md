@@ -201,3 +201,23 @@ What I used:
 ```text
 Added assessment-aligned features: team calendar, employee filters, manager dropdown, CSV export, chart, AI status endpoint, and documentation updates.
 ```
+
+## Prompt 11
+
+What I asked:
+
+```text
+Do the bonus changes if possible: monthly CSV export for team leave reports, simple charts, and half-day support.
+```
+
+What I got:
+
+```text
+Implementation plan for making the existing CSV/chart features more assessment-specific and adding half-day as a persisted backend field.
+```
+
+What I used:
+
+```text
+Added monthly CSV export controls, leave-by-month chart, half-day request support in backend schemas and CRUD, half-day frontend form control, and documentation updates.
+```

@@ -23,7 +23,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
 
 GROQ_API_URL = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_TIMEOUT_SECONDS = int(os.getenv("GROQ_TIMEOUT_SECONDS", "20"))
  
@@ -39,6 +39,7 @@ class LeaveParserResponse(BaseModel):
     leave_type: Optional[LeaveType] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    is_half_day: bool = False
     reason: str
     working_days: float
     confidence: float = Field(ge=0, le=1)
@@ -177,6 +178,7 @@ async def call_groq_json(system_prompt: str, user_prompt: str) -> Dict[str, Any]
 def fallback_parse_leave_request(text: str, today: date) -> LeaveParserResponse:
     lowered = text.lower()
     leave_type = normalize_leave_type(text)
+    is_half_day = bool(re.search(r"\bhalf[- ]?day\b", lowered))
 
     if not leave_type:
         if any(term in lowered for term in ["fever", "sick", "doctor", "medical", "migraine"]):
@@ -213,8 +215,9 @@ def fallback_parse_leave_request(text: str, today: date) -> LeaveParserResponse:
         leave_type=leave_type,
         start_date=start_date,
         end_date=end_date,
+        is_half_day=is_half_day,
         reason=text,
-        working_days=calculate_response_working_days(start_date, end_date),
+        working_days=0.5 if is_half_day and start_date and end_date else calculate_response_working_days(start_date, end_date),
         confidence=0.55 if not missing_fields else 0.3,
         missing_fields=missing_fields,
         source="fallback",
@@ -231,7 +234,8 @@ def build_parser_system_prompt() -> str:
         "Infer Casual for personal events, family functions, weddings, travel, or errands. "
         "Infer Sick for illness or medical issues. "
         "Infer WFH for remote or work-from-home requests. "
-        "Infer Comp-off only when compensatory time off is mentioned."
+        "Infer Comp-off only when compensatory time off is mentioned. "
+        "Set is_half_day true only when the employee explicitly says half-day."
     )
 
 
@@ -245,6 +249,7 @@ def build_parser_user_prompt(text: str, today: date) -> str:
                 "leave_type": "Sick | Casual | WFH | Comp-off | null",
                 "start_date": "YYYY-MM-DD | null",
                 "end_date": "YYYY-MM-DD | null",
+                "is_half_day": "boolean",
                 "reason": "short normalized human reason",
                 "confidence": "number from 0 to 1",
             },
@@ -258,6 +263,9 @@ def normalize_parser_response(ai_json: Dict[str, Any], original_text: str) -> Le
     end_date = parse_optional_date(ai_json.get("end_date"))
     if start_date and end_date and end_date < start_date:
         start_date, end_date = end_date, start_date
+    is_half_day = bool(ai_json.get("is_half_day", False))
+    if is_half_day and start_date and end_date and start_date != end_date:
+        is_half_day = False
 
     missing_fields = []
     if not leave_type:
@@ -275,8 +283,9 @@ def normalize_parser_response(ai_json: Dict[str, Any], original_text: str) -> Le
         leave_type=leave_type,
         start_date=start_date,
         end_date=end_date,
+        is_half_day=is_half_day,
         reason=str(ai_json.get("reason") or original_text),
-        working_days=calculate_response_working_days(start_date, end_date),
+        working_days=0.5 if is_half_day and start_date and end_date else calculate_response_working_days(start_date, end_date),
         confidence=max(0.0, min(float(confidence), 1.0)),
         missing_fields=missing_fields,
         source="groq",
@@ -541,4 +550,3 @@ async def generate_approval_insight(
 
     await save_ai_insight(db, leave_id, insight)
     return insight
-

@@ -95,6 +95,7 @@ class LeaveRequest(MongoModel):
     start_date: date
     end_date: date
     total_days: float
+    is_half_day: bool = False
     reason: str
     status: LeaveStatus = LeaveStatus.pending
     manager_comment: Optional[str] = None

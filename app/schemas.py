@@ -78,6 +78,7 @@ class LeaveRequestBase(BaseModel):
     leave_type: LeaveType
     start_date: date
     end_date: date
+    is_half_day: bool = False
     reason: str = Field(min_length=3, max_length=500)
 
     @field_validator("end_date")
@@ -86,6 +87,15 @@ class LeaveRequestBase(BaseModel):
         start_date = info.data.get("start_date")
         if start_date and value < start_date:
             raise ValueError("end_date cannot be before start_date")
+        return value
+
+    @field_validator("is_half_day")
+    @classmethod
+    def half_day_must_be_single_date(cls, value: bool, info: Any) -> bool:
+        start_date = info.data.get("start_date")
+        end_date = info.data.get("end_date")
+        if value and start_date and end_date and start_date != end_date:
+            raise ValueError("Half-day leave must start and end on the same date")
         return value
 
 
@@ -99,6 +109,7 @@ class LeaveRequestUpdate(BaseModel):
     leave_type: Optional[LeaveType] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    is_half_day: Optional[bool] = None
     reason: Optional[str] = Field(default=None, min_length=3, max_length=500)
 
 
@@ -115,6 +126,7 @@ class LeaveRequestRead(BaseModel):
     start_date: date
     end_date: date
     total_days: float
+    is_half_day: bool = False
     reason: str
     status: LeaveStatus
     manager_comment: Optional[str] = None
