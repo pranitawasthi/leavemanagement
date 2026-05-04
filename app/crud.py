@@ -189,8 +189,12 @@ async def create_leave_request(db: AsyncIOMotorDatabase, leave: LeaveRequestCrea
     user = await db.users.find_one({"_id": user_id})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    if not user.get("manager_id"):
+    manager_id = to_object_id(leave.manager_id) if leave.manager_id else user.get("manager_id")
+    if not manager_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not have a manager")
+    manager = await db.users.find_one({"_id": manager_id, "role": UserRole.manager.value, "is_active": True})
+    if not manager:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected manager does not exist")
 
     total_days = calculate_leave_days(leave.start_date, leave.end_date)
     if total_days <= 0:
@@ -207,7 +211,7 @@ async def create_leave_request(db: AsyncIOMotorDatabase, leave: LeaveRequestCrea
     now = datetime.utcnow()
     leave_document = {
         "user_id": user_id,
-        "manager_id": user["manager_id"],
+        "manager_id": manager_id,
         "leave_type": leave.leave_type.value,
         "start_date": leave.start_date.isoformat(),
         "end_date": leave.end_date.isoformat(),

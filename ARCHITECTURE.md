@@ -102,6 +102,7 @@ app/routes/leaves.py
 ```
 
 Leave request endpoints. Employees can create their own leave requests. Managers can create leave for themselves or team members. Admins can view broader data.
+The calendar endpoint returns pending and approved leave overlaps for the selected week range so the frontend can show who is out.
 
 ```text
 app/routes/managers.py
@@ -127,6 +128,7 @@ AI endpoints:
 
 - `POST /api/v1/ai/parse-leave-request`
 - `POST /api/v1/ai/approval-insight/{leave_id}`
+- `GET /api/v1/ai/status`
 
 The parser endpoint attempts Groq first. If Groq fails, it returns a local fallback result. The response includes `source`, so the frontend can show whether the result came from `groq` or `fallback`.
 
@@ -183,6 +185,7 @@ Employee:
 - Can create leave requests for themselves.
 - Can use the AI leave parser.
 - Can punch in once and punch out once for the current day.
+- Can view the team calendar to see same-week leave conflicts.
 
 Manager:
 
@@ -191,6 +194,7 @@ Manager:
 - Can approve or reject their team members' requests.
 - Can generate AI approval insight for requests assigned to them.
 - Can view attendance records for team members.
+- Can export filtered leave reports as CSV from the frontend.
 
 Admin:
 
@@ -198,6 +202,7 @@ Admin:
 - Can view broader leave data.
 - Can create quotas.
 - Can access manager approval/history endpoints.
+- Can view the full team calendar and export filtered leave reports.
 
 ## Leave Request Flow
 
@@ -224,6 +229,19 @@ source
 9. Manager sees the request in their pending queue.
 10. Manager approves or rejects the request.
 11. Backend updates leave status, quota counts, review metadata, and audit trail.
+
+## Team Calendar Flow
+
+The team calendar is designed to satisfy the client's "who is out this week" requirement.
+
+```text
+Frontend Calendar tab
+  -> GET /api/v1/leaves/calendar?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+  -> backend returns pending and approved overlapping leave requests
+  -> frontend groups requests by day
+```
+
+Employees can view the shared calendar. Managers see records scoped to their team. Admins see all matching records. The frontend supports this week, next week, both weeks, and leave type filtering.
 
 ## AI Parser Flow
 
@@ -386,3 +404,13 @@ The backend CORS configuration allows common local Vite origins.
 - demo credentials are available
 
 The test checks health, auth, RBAC, seeded users, quotas, leave requests, AI parser response shape, approval insight, and manager decisions.
+
+## What I Would Improve With More Time
+
+- Split `frontend/src/App.jsx` into focused component files for easier maintenance.
+- Add backend tests around attendance, team calendar, manager selection, and AI fallback behavior.
+- Add half-day leave support and holiday calendar support in the leave-day calculator.
+- Replace the raw Groq HTTP call with a dedicated client library or `httpx`.
+- Add in-app notifications when a manager approves or rejects a request.
+- Persist generated reports server-side for auditability.
+- Add deployment configuration for a hosted frontend and backend.

@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app import crud
 from app.auth import get_current_user
 from app.database import get_database
-from app.models import LeaveStatus, UserRole
+from app.models import LeaveStatus, LeaveType, UserRole
 from app.schemas import LeaveRequestCreate, LeaveRequestRead, LeaveRequestUpdate
 
 
@@ -71,6 +71,31 @@ async def list_leave_requests(
         start_date=start_date,
         end_date=end_date,
     )
+
+
+@router.get("/calendar", response_model=List[LeaveRequestRead])
+async def list_team_calendar_leave_requests(
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+    leave_type: Optional[LeaveType] = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+    current_user: dict = Depends(get_current_user),
+) -> List[LeaveRequestRead]:
+    if end_date < start_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_date cannot be before start_date")
+
+    query = {
+        "status": {"$in": [LeaveStatus.pending.value, LeaveStatus.approved.value]},
+        "start_date": {"$lte": end_date.isoformat()},
+        "end_date": {"$gte": start_date.isoformat()},
+    }
+    if leave_type:
+        query["leave_type"] = leave_type.value
+    if current_user["role"] == UserRole.manager.value:
+        query["manager_id"] = current_user["_id"]
+
+    leaves = await db.leave_requests.find(query).sort("start_date", 1).to_list(length=200)
+    return [crud.serialize_document(leave) for leave in leaves]
 
 
 @router.get("/{leave_id}", response_model=LeaveRequestRead)

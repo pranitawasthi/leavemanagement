@@ -424,6 +424,67 @@ td span,
   gap: 0.9rem;
 }
 
+.calendar-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.calendar-day {
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.65rem;
+  min-height: 150px;
+  padding: 0.85rem;
+}
+
+.calendar-date {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.calendar-date span,
+.calendar-item span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.calendar-item {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.7rem;
+}
+
+.chart-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.chart-row {
+  align-items: center;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 90px minmax(0, 1fr) 44px;
+}
+
+.chart-track {
+  background: #e2e8f0;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.chart-track span {
+  background: linear-gradient(90deg, var(--teal), var(--blue));
+  display: block;
+  height: 100%;
+}
+
 .attendance-card {
   align-items: center;
   display: grid;
@@ -459,7 +520,7 @@ form {
 }
 
 .filter-row {
-  grid-template-columns: minmax(260px, 1fr) 180px auto;
+  grid-template-columns: minmax(260px, 1fr) repeat(auto-fit, minmax(150px, auto));
   margin-bottom: 1rem;
 }
 

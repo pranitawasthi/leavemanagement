@@ -31,6 +31,8 @@ async def list_users(
     current_user: dict = Depends(get_current_user),
 ) -> List[UserRead]:
     if current_user["role"] == UserRole.employee.value:
+        if role in {UserRole.manager, UserRole.employee}:
+            return await crud.list_users(db, role=role)
         return [public_user(current_user)]
     if current_user["role"] == UserRole.manager.value:
         manager_id = str(current_user["_id"])

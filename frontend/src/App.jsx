@@ -228,12 +228,14 @@ function EmployeeWorkspace({ api, flash, user, users, leaves, quotas, tab, refre
   const userMap = useUserMap(users);
   if (tab === "request") return <LeaveComposer api={api} flash={flash} user={user} refresh={refresh} />;
   if (tab === "balances") return <Balances quotas={quotas} leaves={leaves} userMap={userMap} />;
+  if (tab === "calendar") return <TeamCalendar api={api} flash={flash} users={users} />;
   return (
     <DashboardGrid>
       <SummaryCards leaves={leaves} quotas={quotas} users={users} />
+      <LeaveTypeChart leaves={leaves} />
       <EmployeeAttendance api={api} flash={flash} />
       <Panel title="Recent requests" action={<RefreshButton onClick={refresh} />}>
-        <LeaveList leaves={leaves} userMap={userMap} />
+        <LeaveFilters leaves={leaves} users={users} userMap={userMap} showExport={false} />
       </Panel>
       <Panel title="Profile">
         <Profile user={user} users={users} />
@@ -274,12 +276,14 @@ function ManagerWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
 
   if (tab === "team") return <TeamPage users={users} leaves={leaves} manager={user} userMap={userMap} />;
   if (tab === "attendance") return <ManagerAttendance api={api} flash={flash} users={users} userMap={userMap} />;
+  if (tab === "calendar") return <TeamCalendar api={api} flash={flash} users={users} />;
   if (tab === "history") {
-    return <Panel title="Team leave history" action={<RefreshButton onClick={refresh} />}><LeaveFilters leaves={leaves} users={users} userMap={userMap} /></Panel>;
+    return <Panel title="Team leave history" action={<RefreshButton onClick={refresh} />}><LeaveFilters leaves={leaves} users={users} userMap={userMap} showExport /></Panel>;
   }
   return (
     <DashboardGrid>
       <SummaryCards leaves={leaves} users={users} />
+      <LeaveTypeChart leaves={leaves} />
       <Panel title="Pending approvals" action={<RefreshButton onClick={loadPending} busy={busy} />}>
         <ApprovalQueue api={api} flash={flash} manager={user} leaves={pending} userMap={userMap} onDecision={decide} />
       </Panel>
@@ -290,12 +294,14 @@ function ManagerWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
 function AdminWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
   const userMap = useUserMap(users);
   if (tab === "requests") {
-    return <Panel title="All leave requests" action={<RefreshButton onClick={refresh} />}><LeaveFilters leaves={leaves} users={users} userMap={userMap} /></Panel>;
+    return <Panel title="All leave requests" action={<RefreshButton onClick={refresh} />}><LeaveFilters leaves={leaves} users={users} userMap={userMap} showExport /></Panel>;
   }
+  if (tab === "calendar") return <TeamCalendar api={api} flash={flash} users={users} />;
   if (tab === "create") return <AdminCreateUser api={api} flash={flash} users={users} refresh={refresh} />;
   return (
     <DashboardGrid>
       <SummaryCards leaves={leaves} users={users} />
+      <LeaveTypeChart leaves={leaves} />
       <Panel title="People directory" action={<RefreshButton onClick={refresh} />}>
         <PeopleTable users={users} currentUser={user} />
       </Panel>
@@ -305,9 +311,25 @@ function AdminWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
 
 function LeaveComposer({ api, flash, user, refresh }) {
   const [text, setText] = useState("Need next Monday and Tuesday off for family function");
-  const [form, setForm] = useState({ leave_type: "Casual", start_date: "", end_date: "", reason: "" });
+  const [form, setForm] = useState({ leave_type: "Casual", start_date: "", end_date: "", reason: "", manager_id: user.manager_id || "" });
+  const [managers, setManagers] = useState([]);
   const [parsed, setParsed] = useState(null);
   const [busy, setBusy] = useState("");
+
+  useEffect(() => {
+    async function loadManagers() {
+      try {
+        const result = await api("/users?role=Manager");
+        setManagers(result);
+        if (!form.manager_id && result.length) {
+          setForm((current) => ({ ...current, manager_id: result[0].id }));
+        }
+      } catch (error) {
+        flash(error.message);
+      }
+    }
+    loadManagers();
+  }, []);
 
   const parse = async () => {
     setBusy("parse");
@@ -342,7 +364,7 @@ function LeaveComposer({ api, flash, user, refresh }) {
       flash("Leave request submitted.");
       setText("");
       setParsed(null);
-      setForm({ leave_type: "Casual", start_date: "", end_date: "", reason: "" });
+      setForm({ leave_type: "Casual", start_date: "", end_date: "", reason: "", manager_id: user.manager_id || managers[0]?.id || "" });
       await refresh();
     } catch (error) {
       flash(error.message);
@@ -366,6 +388,7 @@ function LeaveComposer({ api, flash, user, refresh }) {
             <label>Leave type<select value={form.leave_type} onChange={(e) => setForm({ ...form, leave_type: e.target.value })}>{LEAVE_TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
             <label>Start date<input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} required /></label>
             <label>End date<input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} required /></label>
+            <label>Apply to manager<select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })} required>{managers.map((manager) => <option key={manager.id} value={manager.id}>{manager.name}</option>)}</select></label>
           </div>
           <label>Reason<textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} required /></label>
           <button className="primary" disabled={busy === "submit"}>{busy === "submit" ? "Submitting..." : "Submit request"}</button>
@@ -593,13 +616,121 @@ function AdminCreateUser({ api, flash, users, refresh }) {
   );
 }
 
-function LeaveFilters({ leaves, users, userMap }) {
+function TeamCalendar({ api, flash, users }) {
+  const [leaveType, setLeaveType] = useState("");
+  const [range, setRange] = useState("this");
+  const [leaves, setLeaves] = useState([]);
+  const [directory, setDirectory] = useState(users);
+  const [busy, setBusy] = useState(false);
+  const userMap = useUserMap(directory.length ? directory : users);
+  const { start, end } = calendarRange(range);
+
+  const loadCalendar = async () => {
+    setBusy(true);
+    try {
+      const params = new URLSearchParams({ start_date: start, end_date: end });
+      if (leaveType) params.set("leave_type", leaveType);
+      const [calendarLeaves, employees, managers] = await Promise.all([
+        api(`/leaves/calendar?${params.toString()}`),
+        api("/users?role=Employee").catch(() => []),
+        api("/users?role=Manager").catch(() => []),
+      ]);
+      setLeaves(calendarLeaves);
+      setDirectory([...employees, ...managers]);
+    } catch (error) {
+      flash(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCalendar();
+  }, [range, leaveType]);
+
+  return (
+    <Panel title="Team calendar" subtitle="See who is out this week and next week." action={<RefreshButton onClick={loadCalendar} busy={busy} />}>
+      <div className="filter-row">
+        <select value={range} onChange={(e) => setRange(e.target.value)}>
+          <option value="this">This week</option>
+          <option value="next">Next week</option>
+          <option value="both">This and next week</option>
+        </select>
+        <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
+          <option value="">All leave types</option>
+          {LEAVE_TYPES.map((type) => <option key={type}>{type}</option>)}
+        </select>
+        <span>{formatDate(start)} to {formatDate(end)}</span>
+      </div>
+      <CalendarList leaves={leaves} userMap={userMap} start={start} end={end} />
+    </Panel>
+  );
+}
+
+function CalendarList({ leaves, userMap, start, end }) {
+  const days = enumerateDays(start, end);
+  const grouped = days.map((day) => {
+    const items = leaves.filter((leave) => leave.start_date <= day && leave.end_date >= day);
+    return { day, items };
+  });
+
+  return (
+    <div className="calendar-grid">
+      {grouped.map(({ day, items }) => (
+        <section className="calendar-day" key={day}>
+          <div className="calendar-date">
+            <strong>{new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" })}</strong>
+            <span>{formatDate(day)}</span>
+          </div>
+          {items.length ? items.map((leave) => {
+            const person = userMap[leave.user_id];
+            return (
+              <div className="calendar-item" key={`${day}-${leave.id}`}>
+                <strong>{person?.name || "Employee"}</strong>
+                <span>{leave.leave_type}</span>
+                <StatusBadge status={leave.status} />
+              </div>
+            );
+          }) : <p className="muted">No leave</p>}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function LeaveTypeChart({ leaves }) {
+  const counts = LEAVE_TYPES.map((type) => ({
+    type,
+    count: leaves.filter((leave) => leave.leave_type === type).length,
+  }));
+  const max = Math.max(1, ...counts.map((item) => item.count));
+
+  return (
+    <Panel title="Leaves by type">
+      <div className="chart-list">
+        {counts.map((item) => (
+          <div className="chart-row" key={item.type}>
+            <span>{item.type}</span>
+            <div className="chart-track"><span style={{ width: `${(item.count / max) * 100}%` }} /></div>
+            <strong>{item.count}</strong>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function LeaveFilters({ leaves, users, userMap, showExport = false }) {
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const filtered = leaves.filter((leave) => {
     const person = userMap[leave.user_id];
     const haystack = `${person?.name || ""} ${leave.leave_type} ${leave.reason}`.toLowerCase();
-    return (!status || leave.status === status) && haystack.includes(query.toLowerCase());
+    const afterFrom = !from || leave.end_date >= from;
+    const beforeTo = !to || leave.start_date <= to;
+    return (!status || leave.status === status) && haystack.includes(query.toLowerCase()) && afterFrom && beforeTo;
   });
   return (
     <>
@@ -611,7 +742,10 @@ function LeaveFilters({ leaves, users, userMap }) {
           <option>Approved</option>
           <option>Rejected</option>
         </select>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         <span>{filtered.length} of {leaves.length}</span>
+        {showExport && <button className="soft" onClick={() => exportLeavesCsv(filtered, userMap)}>Export CSV</button>}
       </div>
       <LeaveList leaves={filtered} userMap={userMap} />
     </>
@@ -794,9 +928,9 @@ function useUserMap(users) {
 }
 
 function roleTabs(role) {
-  if (role === "Admin") return [{ id: "people", label: "People", step: "01" }, { id: "requests", label: "Requests", step: "02" }, { id: "create", label: "Create user", step: "03" }];
-  if (role === "Manager") return [{ id: "overview", label: "Approvals", step: "01" }, { id: "team", label: "Team", step: "02" }, { id: "attendance", label: "Attendance", step: "03" }, { id: "history", label: "History", step: "04" }];
-  return [{ id: "overview", label: "Overview", step: "01" }, { id: "request", label: "Request", step: "02" }, { id: "balances", label: "Balances", step: "03" }];
+  if (role === "Admin") return [{ id: "people", label: "People", step: "01" }, { id: "calendar", label: "Calendar", step: "02" }, { id: "requests", label: "Requests", step: "03" }, { id: "create", label: "Create user", step: "04" }];
+  if (role === "Manager") return [{ id: "overview", label: "Approvals", step: "01" }, { id: "team", label: "Team", step: "02" }, { id: "calendar", label: "Calendar", step: "03" }, { id: "attendance", label: "Attendance", step: "04" }, { id: "history", label: "History", step: "05" }];
+  return [{ id: "overview", label: "Overview", step: "01" }, { id: "request", label: "Request", step: "02" }, { id: "calendar", label: "Calendar", step: "03" }, { id: "balances", label: "Balances", step: "04" }];
 }
 
 function titleFor(user) {
@@ -814,6 +948,62 @@ function formatDate(value) {
 function localDateISO(value = new Date()) {
   const offsetDate = new Date(value.getTime() - value.getTimezoneOffset() * 60000);
   return offsetDate.toISOString().slice(0, 10);
+}
+
+function calendarRange(range) {
+  const today = new Date();
+  const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const mondayOffset = (current.getDay() + 6) % 7;
+  const thisMonday = new Date(current);
+  thisMonday.setDate(current.getDate() - mondayOffset);
+
+  const startDate = new Date(thisMonday);
+  const endDate = new Date(thisMonday);
+  if (range === "next") {
+    startDate.setDate(thisMonday.getDate() + 7);
+    endDate.setDate(thisMonday.getDate() + 13);
+  } else if (range === "both") {
+    endDate.setDate(thisMonday.getDate() + 13);
+  } else {
+    endDate.setDate(thisMonday.getDate() + 6);
+  }
+  return { start: localDateISO(startDate), end: localDateISO(endDate) };
+}
+
+function enumerateDays(start, end) {
+  const days = [];
+  const cursor = new Date(`${start}T00:00:00`);
+  const last = new Date(`${end}T00:00:00`);
+  while (cursor <= last) {
+    days.push(localDateISO(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+function exportLeavesCsv(leaves, userMap) {
+  const headers = ["Employee", "Leave Type", "Start Date", "End Date", "Days", "Status", "Reason"];
+  const rows = leaves.map((leave) => [
+    userMap[leave.user_id]?.name || leave.user_id,
+    leave.leave_type,
+    leave.start_date,
+    leave.end_date,
+    fmtDays(leave.total_days),
+    leave.status,
+    leave.reason,
+  ]);
+  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `leave-report-${localDateISO()}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
 function formatTime(value) {

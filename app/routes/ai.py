@@ -59,6 +59,12 @@ class ApprovalInsightResponse(BaseModel):
     source: str
 
 
+class AIStatusResponse(BaseModel):
+    groq_configured: bool
+    model: str
+    provider: str = "groq"
+
+
 def extract_json_object(raw_text: str) -> Dict[str, Any]:
     try:
         parsed = json.loads(raw_text)
@@ -507,6 +513,12 @@ async def parse_leave_request(
         return parsed
 
 
+@router.get("/status", response_model=AIStatusResponse)
+async def ai_status(current_user: dict = Depends(get_current_user)) -> AIStatusResponse:
+    _ = current_user
+    return AIStatusResponse(groq_configured=bool(GROQ_API_KEY), model=GROQ_MODEL)
+
+
 @router.post("/approval-insight/{leave_id}", response_model=ApprovalInsightResponse)
 async def generate_approval_insight(
     leave_id: str,
@@ -529,5 +541,4 @@ async def generate_approval_insight(
 
     await save_ai_insight(db, leave_id, insight)
     return insight
-
 

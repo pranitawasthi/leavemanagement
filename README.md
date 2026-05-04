@@ -6,8 +6,13 @@ A role-based leave and time-off management application with a FastAPI backend, M
 
 - Employee, Manager, and Admin role-based views.
 - Employee leave request creation with natural-language AI parsing.
+- Team calendar for this week and next week with leave type filters.
+- Employee leave history filters by status and date range.
+- Manager dropdown on the leave application form.
 - Simulated employee attendance punch-in/punch-out.
 - Manager team attendance visibility.
+- CSV export for filtered manager/admin leave reports.
+- Simple leave-by-type chart.
 - Manager approval queue with approve/reject actions and AI approval insight.
 - Admin people directory and user creation.
 - Leave quotas, leave request history, audit trail storage, and seeded demo data.
@@ -196,11 +201,13 @@ python3 e2e_test.py --base-url http://127.0.0.1:8000
 - `GET /api/v1/users/{user_id}/quotas`
 - `POST /api/v1/leaves`
 - `GET /api/v1/leaves`
+- `GET /api/v1/leaves/calendar`
 - `GET /api/v1/managers/{manager_id}/leave-requests/pending`
 - `PATCH /api/v1/managers/leave-requests/{leave_id}/approve`
 - `PATCH /api/v1/managers/leave-requests/{leave_id}/reject`
 - `POST /api/v1/ai/parse-leave-request`
 - `POST /api/v1/ai/approval-insight/{leave_id}`
+- `GET /api/v1/ai/status`
 - `POST /api/v1/attendance/punch`
 - `GET /api/v1/attendance/me`
 - `GET /api/v1/attendance/team`
@@ -227,6 +234,7 @@ frontend/
 e2e_test.py        API smoke test script
 requirements.txt   Backend dependencies
 ARCHITECTURE.md    System architecture notes
+PROMPTS.md         AI usage and prompt log
 ```
 
 ## Troubleshooting

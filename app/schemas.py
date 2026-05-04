@@ -91,6 +91,7 @@ class LeaveRequestBase(BaseModel):
 
 class LeaveRequestCreate(LeaveRequestBase):
     user_id: str
+    manager_id: Optional[str] = None
     ai_parsed_from_text: Optional[str] = None
 
 
