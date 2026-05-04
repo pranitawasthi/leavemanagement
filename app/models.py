@@ -62,6 +62,7 @@ class User(MongoModel):
     employee_id: str
     name: str
     email: str
+    password_hash: str
     role: UserRole = UserRole.employee
     department: str
     manager_id: Optional[PyObjectId] = None

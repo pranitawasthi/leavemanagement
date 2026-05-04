@@ -80,7 +80,12 @@ async def create_audit_trail(
 
 
 async def create_user(db: AsyncIOMotorDatabase, user: UserCreate) -> Dict[str, Any]:
+    from app.auth import hash_password
+
     user_document = user.model_dump()
+    password = user_document.pop("password")
+    user_document["email"] = user.email.lower().strip()
+    user_document["password_hash"] = hash_password(password)
     user_document["manager_id"] = to_object_id(user.manager_id) if user.manager_id else None
     user_document["role"] = user.role.value
     user_document["created_at"] = datetime.utcnow()
@@ -88,14 +93,18 @@ async def create_user(db: AsyncIOMotorDatabase, user: UserCreate) -> Dict[str, A
 
     result = await db.users.insert_one(user_document)
     user_document["_id"] = result.inserted_id
-    return serialize_document(user_document)
+    serialized = serialize_document(user_document)
+    serialized.pop("password_hash", None)
+    return serialized
 
 
 async def get_user(db: AsyncIOMotorDatabase, user_id: str) -> Dict[str, Any]:
     user = await db.users.find_one({"_id": to_object_id(user_id)})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return serialize_document(user)
+    serialized = serialize_document(user)
+    serialized.pop("password_hash", None)
+    return serialized
 
 
 async def list_users(
@@ -110,7 +119,12 @@ async def list_users(
         query["manager_id"] = to_object_id(manager_id)
 
     users = await db.users.find(query).sort("name", 1).to_list(length=200)
-    return [serialize_document(user) for user in users]
+    serialized_users = []
+    for user in users:
+        serialized = serialize_document(user)
+        serialized.pop("password_hash", None)
+        serialized_users.append(serialized)
+    return serialized_users
 
 
 async def update_user(db: AsyncIOMotorDatabase, user_id: str, user: UserUpdate) -> Dict[str, Any]:
@@ -233,6 +247,8 @@ async def list_leave_requests(
     user_id: Optional[str] = None,
     manager_id: Optional[str] = None,
     status_filter: Optional[LeaveStatus] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
 ) -> List[Dict[str, Any]]:
     query: Dict[str, Any] = {}
     if user_id:
@@ -241,6 +257,13 @@ async def list_leave_requests(
         query["manager_id"] = to_object_id(manager_id)
     if status_filter:
         query["status"] = status_filter.value
+    if start_date and end_date:
+        query["start_date"] = {"$lte": start_date.isoformat()}
+        query["end_date"] = {"$gte": end_date.isoformat()}
+    elif start_date:
+        query["end_date"] = {"$gte": start_date.isoformat()}
+    elif end_date:
+        query["start_date"] = {"$lte": end_date.isoformat()}
 
     leaves = await db.leave_requests.find(query).sort("created_at", -1).to_list(length=200)
     return [serialize_document(leave) for leave in leaves]

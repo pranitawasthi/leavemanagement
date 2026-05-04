@@ -22,7 +22,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    pass
+    password: str = Field(min_length=8, max_length=128)
 
 
 class UserUpdate(BaseModel):
@@ -41,6 +41,17 @@ class UserRead(UserBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserRead
 
 
 class LeaveQuotaBase(BaseModel):
