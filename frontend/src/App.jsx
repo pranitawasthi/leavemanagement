@@ -231,6 +231,7 @@ function EmployeeWorkspace({ api, flash, user, users, leaves, quotas, tab, refre
   return (
     <DashboardGrid>
       <SummaryCards leaves={leaves} quotas={quotas} users={users} />
+      <EmployeeAttendance api={api} flash={flash} />
       <Panel title="Recent requests" action={<RefreshButton onClick={refresh} />}>
         <LeaveList leaves={leaves} userMap={userMap} />
       </Panel>
@@ -272,6 +273,7 @@ function ManagerWorkspace({ api, flash, user, users, leaves, tab, refresh }) {
   };
 
   if (tab === "team") return <TeamPage users={users} leaves={leaves} manager={user} userMap={userMap} />;
+  if (tab === "attendance") return <ManagerAttendance api={api} flash={flash} users={users} userMap={userMap} />;
   if (tab === "history") {
     return <Panel title="Team leave history" action={<RefreshButton onClick={refresh} />}><LeaveFilters leaves={leaves} users={users} userMap={userMap} /></Panel>;
   }
@@ -376,6 +378,121 @@ function LeaveComposer({ api, flash, user, refresh }) {
 function ApprovalQueue({ api, flash, manager, leaves, userMap, onDecision }) {
   if (!leaves.length) return <EmptyState title="No pending approvals" text="The approval queue is clear." />;
   return <div className="stack">{leaves.map((leave) => <ApprovalCard key={leave.id} api={api} flash={flash} manager={manager} leave={leave} user={userMap[leave.user_id]} onDecision={onDecision} />)}</div>;
+}
+
+function EmployeeAttendance({ api, flash }) {
+  const [records, setRecords] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const today = localDateISO();
+  const current = records[0];
+
+  const loadAttendance = async () => {
+    try {
+      setRecords(await api(`/attendance/me?work_date=${today}`));
+    } catch (error) {
+      flash(error.message);
+    }
+  };
+
+  useEffect(() => {
+    loadAttendance();
+  }, []);
+
+  const punch = async () => {
+    setBusy(true);
+    try {
+      const record = await api("/attendance/punch", { method: "POST", body: JSON.stringify({}) });
+      setRecords([record]);
+      flash(record.exit_time ? "Exit time recorded." : "Entry time recorded.");
+    } catch (error) {
+      flash(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const buttonText = !current ? "Mark entry" : current.exit_time ? "Attendance complete" : "Mark exit";
+
+  return (
+    <Panel title="Today attendance" action={<RefreshButton onClick={loadAttendance} />}>
+      <div className="attendance-card">
+        <div className="attendance-times">
+          <Metric label="Entry" value={current?.entry_time ? formatTime(current.entry_time) : "Not marked"} />
+          <Metric label="Exit" value={current?.exit_time ? formatTime(current.exit_time) : "Not marked"} />
+          <Metric label="Status" value={current?.status || "Not started"} />
+        </div>
+        <button className="primary" onClick={punch} disabled={busy || Boolean(current?.exit_time)}>
+          {busy ? "Saving..." : buttonText}
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+function ManagerAttendance({ api, flash, userMap }) {
+  const [workDate, setWorkDate] = useState(localDateISO());
+  const [records, setRecords] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  const loadAttendance = async () => {
+    setBusy(true);
+    try {
+      const query = workDate ? `?work_date=${workDate}` : "";
+      setRecords(await api(`/attendance/team${query}`));
+    } catch (error) {
+      flash(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAttendance();
+  }, []);
+
+  return (
+    <Panel title="Team attendance" subtitle="Simulated entry and exit times from employee punch actions." action={<RefreshButton onClick={loadAttendance} busy={busy} />}>
+      <div className="filter-row">
+        <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+        <button className="soft" onClick={loadAttendance} disabled={busy}>Apply date</button>
+        <span>{records.length} record(s)</span>
+      </div>
+      <AttendanceTable records={records} userMap={userMap} />
+    </Panel>
+  );
+}
+
+function AttendanceTable({ records, userMap }) {
+  if (!records.length) return <EmptyState title="No attendance records" text="No team member has marked attendance for this date." />;
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Date</th>
+            <th>Entry</th>
+            <th>Exit</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((record) => {
+            const employee = userMap[record.user_id];
+            return (
+              <tr key={record.id}>
+                <td><strong>{employee?.name || record.user_id}</strong><span>{employee?.employee_id || "Employee"}</span></td>
+                <td>{record.work_date}</td>
+                <td>{formatTime(record.entry_time)}</td>
+                <td>{record.exit_time ? formatTime(record.exit_time) : "Not marked"}</td>
+                <td><StatusBadge status={record.status} /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function ApprovalCard({ api, flash, manager, leave, user, onDecision }) {
@@ -678,7 +795,7 @@ function useUserMap(users) {
 
 function roleTabs(role) {
   if (role === "Admin") return [{ id: "people", label: "People", step: "01" }, { id: "requests", label: "Requests", step: "02" }, { id: "create", label: "Create user", step: "03" }];
-  if (role === "Manager") return [{ id: "overview", label: "Approvals", step: "01" }, { id: "team", label: "Team", step: "02" }, { id: "history", label: "History", step: "03" }];
+  if (role === "Manager") return [{ id: "overview", label: "Approvals", step: "01" }, { id: "team", label: "Team", step: "02" }, { id: "attendance", label: "Attendance", step: "03" }, { id: "history", label: "History", step: "04" }];
   return [{ id: "overview", label: "Overview", step: "01" }, { id: "request", label: "Request", step: "02" }, { id: "balances", label: "Balances", step: "03" }];
 }
 
@@ -692,6 +809,16 @@ function titleFor(user) {
 function formatDate(value) {
   if (!value) return "";
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function localDateISO(value = new Date()) {
+  const offsetDate = new Date(value.getTime() - value.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 10);
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 function fmtDays(value) {

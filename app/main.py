@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import close_mongo_connection, connect_to_mongo
-from app.routes import ai, auth, leaves, managers, users
+from app.routes import ai, attendance, auth, leaves, managers, users
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ app.include_router(users.router, prefix="/api/v1")
 app.include_router(leaves.router, prefix="/api/v1")
 app.include_router(managers.router, prefix="/api/v1")
 app.include_router(ai.router, prefix="/api/v1")
+app.include_router(attendance.router, prefix="/api/v1")
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

@@ -51,6 +51,11 @@ class LeaveStatus(str, Enum):
     rejected = "Rejected"
 
 
+class AttendanceStatus(str, Enum):
+    checked_in = "Checked-in"
+    checked_out = "Checked-out"
+
+
 class AuditAction(str, Enum):
     created = "Created"
     approved = "Approved"
@@ -97,6 +102,17 @@ class LeaveRequest(MongoModel):
     ai_insight: Optional[Dict[str, Any]] = None
     reviewed_by: Optional[PyObjectId] = None
     reviewed_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AttendanceRecord(MongoModel):
+    user_id: PyObjectId
+    manager_id: Optional[PyObjectId] = None
+    work_date: date
+    entry_time: datetime
+    exit_time: Optional[datetime] = None
+    status: AttendanceStatus = AttendanceStatus.checked_in
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

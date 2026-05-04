@@ -6,6 +6,8 @@ A role-based leave and time-off management application with a FastAPI backend, M
 
 - Employee, Manager, and Admin role-based views.
 - Employee leave request creation with natural-language AI parsing.
+- Simulated employee attendance punch-in/punch-out.
+- Manager team attendance visibility.
 - Manager approval queue with approve/reject actions and AI approval insight.
 - Admin people directory and user creation.
 - Leave quotas, leave request history, audit trail storage, and seeded demo data.
@@ -199,6 +201,9 @@ python3 e2e_test.py --base-url http://127.0.0.1:8000
 - `PATCH /api/v1/managers/leave-requests/{leave_id}/reject`
 - `POST /api/v1/ai/parse-leave-request`
 - `POST /api/v1/ai/approval-insight/{leave_id}`
+- `POST /api/v1/attendance/punch`
+- `GET /api/v1/attendance/me`
+- `GET /api/v1/attendance/team`
 
 ## Project Structure
 

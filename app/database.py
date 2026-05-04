@@ -29,6 +29,12 @@ async def connect_to_mongo() -> None:
     await mongodb.database.leave_requests.create_index("user_id")
     await mongodb.database.leave_requests.create_index("manager_id")
     await mongodb.database.leave_requests.create_index("status")
+    await mongodb.database.attendance_records.create_index(
+        [("user_id", 1), ("work_date", 1)],
+        unique=True,
+    )
+    await mongodb.database.attendance_records.create_index("manager_id")
+    await mongodb.database.attendance_records.create_index("work_date")
     await mongodb.database.audit_trails.create_index("entity_id")
 
 

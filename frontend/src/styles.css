@@ -176,6 +176,7 @@ textarea {
 .insight-grid {
   display: grid;
   gap: 0.85rem;
+  color: black;
 }
 
 .preset-grid {
@@ -399,13 +400,15 @@ td span,
 }
 
 .badge.pending,
-.badge.medium {
+.badge.medium,
+.badge.checked-in {
   background: #fff7ed;
   color: var(--amber);
 }
 
 .badge.approved,
-.badge.low {
+.badge.low,
+.badge.checked-out {
   background: #ecfdf5;
   color: var(--green);
 }
@@ -419,6 +422,19 @@ td span,
 .composer {
   display: grid;
   gap: 0.9rem;
+}
+
+.attendance-card {
+  align-items: center;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.attendance-times {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .form-grid,
@@ -555,6 +571,11 @@ th {
 
   .decision-row,
   .filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .attendance-card,
+  .attendance-times {
     grid-template-columns: 1fr;
   }
 }

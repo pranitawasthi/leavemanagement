@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.models import AuditAction, LeaveStatus, LeaveType, UserRole
+from app.models import AttendanceStatus, AuditAction, LeaveStatus, LeaveType, UserRole
 
 
 class APIMessage(BaseModel):
@@ -121,6 +121,18 @@ class LeaveRequestRead(BaseModel):
     ai_insight: Optional[Dict[str, Any]] = None
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AttendanceRecordRead(BaseModel):
+    id: str
+    user_id: str
+    manager_id: Optional[str] = None
+    work_date: date
+    entry_time: datetime
+    exit_time: Optional[datetime] = None
+    status: AttendanceStatus
     created_at: datetime
     updated_at: datetime
 

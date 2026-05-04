@@ -23,7 +23,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 logger = logging.getLogger(__name__)
 
 GROQ_API_URL = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_TIMEOUT_SECONDS = int(os.getenv("GROQ_TIMEOUT_SECONDS", "20"))
  

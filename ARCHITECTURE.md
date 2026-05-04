@@ -8,6 +8,7 @@ The application is split into two main parts:
 - A React/Vite frontend under `frontend/`.
 
 MongoDB stores users, leave quotas, leave requests, and audit trails. The frontend authenticates with the backend, stores the bearer token in local storage, and calls role-specific API endpoints.
+Attendance records are also stored in MongoDB for the simulated entry/exit workflow.
 
 ```text
 Browser
@@ -109,6 +110,16 @@ app/routes/managers.py
 Manager approval queue and approval/rejection endpoints.
 
 ```text
+app/routes/attendance.py
+```
+
+Simulated attendance endpoints:
+
+- `POST /api/v1/attendance/punch`
+- `GET /api/v1/attendance/me`
+- `GET /api/v1/attendance/team`
+
+```text
 app/routes/ai.py
 ```
 
@@ -171,6 +182,7 @@ Employee:
 - Can view their own leave requests.
 - Can create leave requests for themselves.
 - Can use the AI leave parser.
+- Can punch in once and punch out once for the current day.
 
 Manager:
 
@@ -178,6 +190,7 @@ Manager:
 - Can view pending approval queue for their own manager ID.
 - Can approve or reject their team members' requests.
 - Can generate AI approval insight for requests assigned to them.
+- Can view attendance records for team members.
 
 Admin:
 
@@ -235,6 +248,26 @@ call_groq_json()
 ```
 
 The fallback parser is deliberately local and deterministic. It handles common phrases such as weekdays, tomorrow, ISO dates, day/month dates, month names, and simple duration phrases.
+
+## Attendance Flow
+
+The attendance workflow is a simulation of office entry and exit.
+
+```text
+Employee clicks Mark entry
+  -> POST /api/v1/attendance/punch
+  -> backend creates today's attendance record
+
+Employee clicks Mark exit
+  -> POST /api/v1/attendance/punch
+  -> backend updates today's record with exit_time
+
+Manager opens Attendance tab
+  -> GET /api/v1/attendance/team?work_date=YYYY-MM-DD
+  -> backend returns records for the manager's team
+```
+
+Employees can read their own attendance with `GET /api/v1/attendance/me`. Managers can only see records where they are the employee's manager. Admins can use the team endpoint to see all attendance records.
 
 ## AI Approval Insight Flow
 
@@ -299,6 +332,15 @@ Audit trails:
 - action
 - before/after snapshots
 - timestamp
+
+Attendance records:
+
+- user
+- manager
+- work date
+- entry time
+- exit time
+- status
 
 ## Configuration
 
